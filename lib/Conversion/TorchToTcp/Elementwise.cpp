@@ -74,8 +74,10 @@ public:
   }
 };
 
+
+
 template <typename AtenOpT, typename TcpOpT>
-class ConvertAtenMinMaxOp : public OpConversionPattern<AtenOpT> {
+class ConvertAtenMinMaxFOp : public OpConversionPattern<AtenOpT> {
 public:
   using OpConversionPattern<AtenOpT>::OpConversionPattern;
   using OpAdaptor = typename AtenOpT::Adaptor;
@@ -101,17 +103,10 @@ public:
     lhs = torch_to_tcp::broadcastInLeadingDimsToMatchShape(rewriter, lhs, rhs);
     rhs = torch_to_tcp::broadcastInLeadingDimsToMatchShape(rewriter, rhs, lhs);
 
-    if (!skipMultiplyAlpha(op.getAlpha()))
-      return rewriter.notifyMatchFailure(
-          op, "torch ops with alpha != 1 is not yet supported in "
-              "Torch to TCP conversion");
-
     rewriter.replaceOpWithNewOp<TcpOpT>(op, resultType, lhs, rhs);
     return success();
   }
 };
-
-
 
 class ConvertAtenMulOp : public OpConversionPattern<AtenMulTensorOp> {
 public:
@@ -337,6 +332,13 @@ void torch_to_tcp::populateElementwisePatternsAndLegality(
   patterns.add<ConvertAtenAddSubOp<AtenAddTensorOp, tcp::AddOp>>(typeConverter,
                                                                  context);
   patterns.add<ConvertAtenAddSubOp<AtenSubTensorOp, tcp::SubOp>>(typeConverter,
+                                                                 context);
+
+  target.addIllegalOp<AtenMinimumOp>();
+  target.addIllegalOp<AtenMaximumOp>();
+  patterns.add<ConvertAtenMinMaxFOp<AtenMinimumOp, tcp::MinFOp>>(typeConverter,
+                                                                 context);
+  patterns.add<ConvertAtenMinMaxFOp<AtenMaximumOp, tcp::MaxFOp>>(typeConverter,
                                                                  context);
 
   target.addIllegalOp<AtenMulTensorOp>();

@@ -74,6 +74,40 @@ public:
   }
 };
 
+
+
+template <typename AtenOpT, typename TcpOpT>
+class ConvertAtenMinMaxFOp : public OpConversionPattern<AtenOpT> {
+public:
+  using OpConversionPattern<AtenOpT>::OpConversionPattern;
+  using OpAdaptor = typename AtenOpT::Adaptor;
+
+  LogicalResult
+  matchAndRewrite(AtenOpT op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    Value lhs = adaptor.getSelf();
+    RankedTensorType lhsType = lhs.getType().dyn_cast<RankedTensorType>();
+
+    Value rhs = adaptor.getOther();
+    RankedTensorType rhsType = rhs.getType().dyn_cast<RankedTensorType>();
+
+    RankedTensorType resultType =
+        OpConversionPattern<AtenOpT>::getTypeConverter()
+            ->convertType(op.getType())
+            .template cast<RankedTensorType>();
+
+    if (!lhsType || !rhsType || !resultType)
+      return rewriter.notifyMatchFailure(
+          op, "Only Ranked Tensor types are supported in TCP");
+
+    lhs = torch_to_tcp::broadcastInLeadingDimsToMatchShape(rewriter, lhs, rhs);
+    rhs = torch_to_tcp::broadcastInLeadingDimsToMatchShape(rewriter, rhs, lhs);
+
+    rewriter.replaceOpWithNewOp<TcpOpT>(op, resultType, lhs, rhs);
+    return success();
+  }
+};
+
 class ConvertAtenMulOp : public OpConversionPattern<AtenMulTensorOp> {
 public:
   using OpConversionPattern<AtenMulTensorOp>::OpConversionPattern;
@@ -298,6 +332,13 @@ void torch_to_tcp::populateElementwisePatternsAndLegality(
   patterns.add<ConvertAtenAddSubOp<AtenAddTensorOp, tcp::AddOp>>(typeConverter,
                                                                  context);
   patterns.add<ConvertAtenAddSubOp<AtenSubTensorOp, tcp::SubOp>>(typeConverter,
+                                                                 context);
+
+  target.addIllegalOp<AtenMinimumOp>();
+  target.addIllegalOp<AtenMaximumOp>();
+  patterns.add<ConvertAtenMinMaxFOp<AtenMinimumOp, tcp::MinFOp>>(typeConverter,
+                                                                 context);
+  patterns.add<ConvertAtenMinMaxFOp<AtenMaximumOp, tcp::MaxFOp>>(typeConverter,
                                                                  context);
 
   target.addIllegalOp<AtenMulTensorOp>();

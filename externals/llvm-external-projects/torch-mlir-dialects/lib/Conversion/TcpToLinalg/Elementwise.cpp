@@ -106,6 +106,22 @@ createLinalgPayloadForElementwiseOp(Operation *op,
     return {b.create<arith::DivFOp>(loc, one, sum)};
   }
 
+  if (isa<MinFOp>(op)) {
+    if (elemType.isa<mlir::FloatType>()) {
+      return {b.create<arith::MinFOp>(loc, payloadArgs[0], payloadArgs[1])};
+    }
+    llvm_unreachable(
+      "unsupported element type in createLinalgPayloadForElementwiseOp");
+  }
+
+  if (isa<MaxFOp>(op)) {
+    if (elemType.isa<mlir::FloatType>()) {
+      return {b.create<arith::MaxFOp>(loc, payloadArgs[0], payloadArgs[1])};
+    }
+    llvm_unreachable(
+      "unsupported element type in createLinalgPayloadForElementwiseOp");
+  }
+
   if (isa<AddOp>(op)) {
     if (elemType.isa<mlir::FloatType>())
       return {b.create<arith::AddFOp>(loc, payloadArgs[0], payloadArgs[1])};
